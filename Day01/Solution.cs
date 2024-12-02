@@ -1,3 +1,5 @@
+using AdventOfCode2024.Lib;
+
 namespace AdventOfCode2024.Day01;
 
 /// <summary>

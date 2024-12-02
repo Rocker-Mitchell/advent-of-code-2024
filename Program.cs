@@ -1,4 +1,4 @@
-﻿using AdventOfCode2024;
+﻿using AdventOfCode2024.Lib;
 
 if (args.Length == 0)
 {

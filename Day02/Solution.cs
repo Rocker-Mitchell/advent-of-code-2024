@@ -1,3 +1,5 @@
+using AdventOfCode2024.Lib;
+
 namespace AdventOfCode2024.Day02;
 
 /// <summary>
@@ -16,7 +18,7 @@ class Solution : ISolver
         get
         {
             var fullName = GetType().Namespace ?? "";
-            var dir = Path.Combine(fullName.Split('.'));
+            var dir = Path.Combine(fullName.Split('.')[1..]);
             return Path.Combine(dir, "input.test.txt");
         }
     }

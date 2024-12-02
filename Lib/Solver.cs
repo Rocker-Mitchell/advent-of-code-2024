@@ -1,4 +1,4 @@
-namespace AdventOfCode2024;
+namespace AdventOfCode2024.Lib;
 
 interface ISolver
 {
@@ -14,10 +14,12 @@ interface ISolver
     {
         get
         {
-            // expect the namespace to reflect the folder structure, and
-            //  "input.txt" being co-located with the solver code
+            // expect the namespace styling to line up with the folder
+            //  structure (project name, then following parts matching
+            //  folders), and "input.txt" being co-located with the solution
+            //  code
             var fullName = GetType().Namespace ?? "";
-            var dir = Path.Combine(fullName.Split('.'));
+            var dir = Path.Combine(fullName.Split('.')[1..]);
             return Path.Combine(dir, "input.txt");
         }
     }

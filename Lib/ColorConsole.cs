@@ -1,4 +1,4 @@
-namespace AdventOfCode2024;
+namespace AdventOfCode2024.Lib;
 
 /// <summary>
 /// Wrapper functions to add color when writing to console.
