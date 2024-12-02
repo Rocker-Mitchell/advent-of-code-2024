@@ -14,12 +14,7 @@ interface ISolver
     {
         get
         {
-            // expect the namespace styling to line up with the folder
-            //  structure (project name, then following parts matching
-            //  folders), and "input.txt" being co-located with the solution
-            //  code
-            var fullName = GetType().Namespace ?? "";
-            var dir = Path.Combine(fullName.Split('.')[1..]);
+            var dir = NamespacePath.GetFolderPathFromType(GetType());
             return Path.Combine(dir, "input.txt");
         }
     }

@@ -17,8 +17,7 @@ class Solution : ISolver
     {
         get
         {
-            var fullName = GetType().Namespace ?? "";
-            var dir = Path.Combine(fullName.Split('.')[1..]);
+            var dir = NamespacePath.GetFolderPathFromType(GetType());
             return Path.Combine(dir, "input.test.txt");
         }
     }
