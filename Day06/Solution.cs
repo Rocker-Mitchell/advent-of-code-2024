@@ -38,6 +38,11 @@ readonly struct PointDirection(Point point, Direction direction)
 /// </summary>
 class Solution : ISolver
 {
+    public string PrintName
+    {
+        get { return "Day 6: Guard Gallivant"; }
+    }
+
     private static
     (Point bounds, Point guard, ImmutableHashSet<Point> obstacles)
     ParseInput(string input)
