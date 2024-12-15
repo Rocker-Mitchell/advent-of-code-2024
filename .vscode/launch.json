@@ -22,12 +22,23 @@
             "request": "attach"
         },
         {
-            "name": ".NET Core Launch (console) - Day 13",
+            "name": "Day 13 (console)",
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
             "program": "${workspaceFolder}/bin/Debug/net9.0/AdventOfCode2024.dll",
             "args": ["13"],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "console": "internalConsole"
+        },
+        {
+            "name": "Day 15 (console)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/bin/Debug/net9.0/AdventOfCode2024.dll",
+            "args": ["15"],
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false,
             "console": "internalConsole"
