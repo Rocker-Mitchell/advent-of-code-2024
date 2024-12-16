@@ -181,12 +181,14 @@ class Solution : ISolver
                 Point testPoint = new(x, y);
                 if (walls.Contains(testPoint))
                     Console.Write('#');
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
                 else if (boxes.Any(box => box.Overlaps([testPoint])))
                     Console.Write('O');
                 else if (robot.Overlaps([testPoint]))
                     Console.Write('@');
                 else
                     Console.Write('.');
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
             }
             Console.WriteLine();
         }
@@ -211,6 +213,6 @@ class Solution : ISolver
         return boxes.Select(box => box.Coordinate()).Sum();\
         */
         // BUG StackOverflowException, having hard time debugging
-        return null;
+        return "TODO implement";
     }
 }
