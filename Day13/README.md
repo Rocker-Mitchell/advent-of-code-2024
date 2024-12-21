@@ -20,4 +20,4 @@ Solve for the fewest tokens to spend to win all possible prizes.
 
 ## Part 2
 
-There was a unit conversion error in the input, all prizes are 1e13 higher on both axes. That would revise the machine in the earlier example to have the prize at `(10000000008400, 10000000005400)`. This can change what machines are solvable now, but can also require more than 100 presses to a button.
+There was a unit conversion error in the input, all prizes are 10000000000000 higher on both axes. That would revise the machine in the earlier example to have the prize at `(10000000008400, 10000000005400)`. This can change what machines are solvable now, but can also require more than 100 presses to a button.

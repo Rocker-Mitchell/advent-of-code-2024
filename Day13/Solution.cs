@@ -24,17 +24,17 @@ partial class Solution : ISolver
     }
     //*/
 
-    private record struct DoubleVector2(double X, double Y);
+    private record struct LongVector2(long X, long Y);
 
     private readonly record struct ClawMachine(
-        DoubleVector2 AButton,
-        DoubleVector2 BButton,
-        DoubleVector2 Prize
+        LongVector2 AButton,
+        LongVector2 BButton,
+        LongVector2 Prize
     )
     {
-        public bool IsSolution(double aPresses, double bPresses)
+        public bool IsSolution(long aPresses, long bPresses)
         {
-            double finalX = AButton.X * aPresses + BButton.X * bPresses,
+            long finalX = AButton.X * aPresses + BButton.X * bPresses,
                 finalY = AButton.Y * aPresses + BButton.Y * bPresses;
             return finalX == Prize.X && finalY == Prize.Y;
         }
@@ -63,19 +63,19 @@ partial class Solution : ISolver
             var bButtonY = int.Parse(matchBButton.Groups[2].Value);
 
             var matchPrize = PrizePositionRegex().Match(lines[2]);
-            double prizeX = int.Parse(matchPrize.Groups[1].Value);
-            double prizeY = int.Parse(matchPrize.Groups[2].Value);
+            long prizeX = int.Parse(matchPrize.Groups[1].Value);
+            long prizeY = int.Parse(matchPrize.Groups[2].Value);
 
             if (unitConversionFix)
             {
-                prizeX += 1e13;
-                prizeY += 1e13;
+                prizeX += 10_000_000_000_000;
+                prizeY += 10_000_000_000_000;
             }
 
             return new ClawMachine(
-                new DoubleVector2(aButtonX, aButtonY),
-                new DoubleVector2(bButtonX, bButtonY),
-                new DoubleVector2(prizeX, prizeY)
+                new LongVector2(aButtonX, aButtonY),
+                new LongVector2(bButtonX, bButtonY),
+                new LongVector2(prizeX, prizeY)
             );
         }
 
@@ -91,51 +91,34 @@ partial class Solution : ISolver
         return aPresses * 3 + bPresses * 1;
     }
 
-    private static
-    (double aPresses, double bPresses)
-    SolveButtonPressIntersect(ClawMachine machine)
+    private static (long aPresses, long bPresses)
+    TrySolveLinearEquationByElimination(ClawMachine machine)
     {
-        // initial linear formulas expressing the problem:
-        //  a * a_x + b * b_x = p_x
-        //  a * a_y + b * b_y = p_y
-        // solving for b in first formula:
-        //  b = (p_x - a*a_x) / b_x = - a * a_x/b_x + p_x/b_x
-        // solving for a in second formula, plugging in solution for b
-        //  p_y = a * (a_y - b_y * a_x/b_x) + b_y * p_x/b_x
-        //  a = (p_y - b_y * p_x/b_x) / (a_y - b_y * a_x/b_x)
-        double aPresses = (
-            machine.Prize.Y
-            - (
-                machine.BButton.Y
-                * machine.Prize.X
-                / machine.BButton.X
-            )
+        /*
+        initial linear equations expressing the problem:
+            a * a_x + b * b_x = p_x
+            a * a_y + b * b_y = p_y
+        multiply equations to match multipliers on a:
+            a * a_x * a_y + b * b_x * a_y = p_x * a_y
+            a * a_y * a_x + b * b_y * a_x = p_y * a_x
+        combine equations by subtraction:
+            b * (b_x * a_y - b_y * a_x) = p_x * a_y - p_y * a_x
+            b = (p_x * a_y - p_y * a_x) / (b_x * a_y - b_y * a_x)
+        plug in solved b for a:
+            a = (p_x - b * b_x) / a_x
+        */
+        long bPresses = (
+            machine.Prize.X * machine.AButton.Y
+            - machine.Prize.Y * machine.AButton.X
         ) / (
-            machine.AButton.Y
-            - (
-                machine.BButton.Y
-                * machine.AButton.X
-                / machine.BButton.X
-            )
+            machine.BButton.X * machine.AButton.Y
+            - machine.BButton.Y * machine.AButton.X
         );
-        double bPresses = (
-            machine.Prize.X - (machine.AButton.X * aPresses)
-        ) / machine.BButton.X;
+        long aPresses = (
+            machine.Prize.X - bPresses * machine.BButton.X
+        ) / machine.AButton.X;
 
         return (aPresses, bPresses);
-    }
-
-    private static
-    double CoerceToNearestWholeNumber(double value, double marginOfError = 1e-6)
-    {
-        if (Math.Abs(value - Math.Round(value)) < marginOfError)
-        {
-            return Math.Round(value);
-        }
-        else
-        {
-            return value;
-        }
     }
 
     private (int solvableMachines, long totalTokens) CalculateTotalTokens()
@@ -144,19 +127,13 @@ partial class Solution : ISolver
         long totalTokens = 0;
         foreach (var machine in clawMachines)
         {
-            var (aPresses, bPresses) = SolveButtonPressIntersect(machine);
+            var (aPresses, bPresses) =
+                TrySolveLinearEquationByElimination(machine);
 
-            // trying to address floating point errors
-            aPresses = CoerceToNearestWholeNumber(aPresses);
-            bPresses = CoerceToNearestWholeNumber(bPresses);
-
-            if (
-                aPresses >= 0 && bPresses >= 0
-                && aPresses % 1 == 0 && bPresses % 1 == 0
-            )
+            if (machine.IsSolution(aPresses, bPresses))
             {
                 solvableMachines++;
-                totalTokens += TokensCost((long)aPresses, (long)bPresses);
+                totalTokens += TokensCost(aPresses, bPresses);
             }
         }
 
@@ -179,9 +156,5 @@ partial class Solution : ISolver
         var (solvableMachines, totalTokens) = CalculateTotalTokens();
 
         return $"solvable machines: {solvableMachines}, total tokens: {totalTokens}";
-        // BUG getting too few tokens
-        // TODO probably need an entirely different solution to solve
-        //  intersection that won't fail from floating point precision errors,
-        //  since this part clearly is targeting the use of floating point
     }
 }
