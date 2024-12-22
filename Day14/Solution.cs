@@ -42,9 +42,7 @@ partial class Solution : ISolver
 
     private void ParseRobots(string input)
     {
-        var robotsQuery =
-            from line in input.Split('\n')
-            select ParseRobot(line);
+        var robotsQuery = from line in input.Split('\n') select ParseRobot(line);
         robots = robotsQuery.ToArray();
     }
 
@@ -54,17 +52,9 @@ partial class Solution : ISolver
     {
         // use the remainder of dividing by room size as the wrapped position
         Point wrappedPosition = new(
-            position.X % roomSize.Width,
-            position.Y % roomSize.Height
+            MathUtility.Mod(position.X, roomSize.Width),
+            MathUtility.Mod(position.Y, roomSize.Height)
         );
-
-        // handle negative values by incrementing with room size
-        if (wrappedPosition.X < 0)
-            wrappedPosition.X += roomSize.Width;
-
-        if (wrappedPosition.Y < 0)
-            wrappedPosition.Y += roomSize.Height;
-
         return wrappedPosition;
     }
 
@@ -111,10 +101,9 @@ partial class Solution : ISolver
     {
         StringBuilder builder = new(roomSize.Width * roomSize.Height);
 
-        var pointCountMap = robotPositions.Distinct().ToDictionary(
-            pos => pos,
-            pos => robotPositions.Count(rp => rp == pos)
-        );
+        var pointCountMap = robotPositions
+            .Distinct()
+            .ToDictionary(pos => pos, pos => robotPositions.Count(rp => rp == pos));
 
         for (int y = 0; y <= roomSize.Height; y++)
         {
@@ -179,10 +168,7 @@ partial class Solution : ISolver
             int[] xValues = points.Select(p => p.X).ToArray(),
                 yValues = points.Select(p => p.Y).ToArray();
 
-            return (
-                xVariance: Variance(xValues),
-                yVariance: Variance(yValues)
-            );
+            return (xVariance: Variance(xValues), yVariance: Variance(yValues));
         }
 
         var variances = (
@@ -190,7 +176,8 @@ partial class Solution : ISolver
             select PointVariance(CalculateFuturePositions(time))
         ).ToArray();
 
-        int bestXTime = 0, bestYTime = 0;
+        int bestXTime = 0,
+            bestYTime = 0;
         double bestXVariance = variances[0].xVariance,
             bestYVariance = variances[0].yVariance;
         for (int time = 0; time < variances.Length; time++)
@@ -218,7 +205,8 @@ partial class Solution : ISolver
         static int ModularInverse(int a, int modulo)
         {
             int modulo0 = modulo;
-            int y = 0, x = 1;
+            int y = 0,
+                x = 1;
 
             if (modulo == 1)
                 return 0;
@@ -226,7 +214,7 @@ partial class Solution : ISolver
             while (a > 1)
             {
                 int quotient = a / modulo;
-                
+
                 int temp = modulo;
                 // modulo is remainder, process as Euclid's GCD
                 modulo = a % modulo;
@@ -244,15 +232,11 @@ partial class Solution : ISolver
             return x;
         }
 
-        int k =
-            ModularInverse(roomSize.Width, roomSize.Height)
-            % roomSize.Height
-            * (bestYTime - bestXTime)
-            % roomSize.Height;
-        // NB because we'd prefer the k coefficient is positive for a positive
-        //  return value
-        if (k < 0)
-            k += roomSize.Height;
+        int k = MathUtility.Mod(
+            MathUtility.Mod(ModularInverse(roomSize.Width, roomSize.Height), roomSize.Height)
+                * (bestYTime - bestXTime),
+            roomSize.Height
+        );
 
         return bestXTime + k * roomSize.Width;
     }

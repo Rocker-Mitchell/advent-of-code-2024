@@ -56,9 +56,7 @@ class Solution : ISolver
         if (operand == 6)
             return registerC;
 
-        throw new ArgumentException(
-            $"Could not handle operand {operand}.", nameof(operand)
-        );
+        throw new ArgumentException($"Could not handle operand {operand}.", nameof(operand));
     }
 
     /// <summary>
@@ -69,17 +67,12 @@ class Solution : ISolver
         return registerA / (long)Math.Pow(2, ComboOperand(operand));
     }
 
-    private static long PositiveMod(long value, long modulo)
-    {
-        return (value % modulo + modulo) % modulo;
-    }
-
     /// <summary>
     /// Calculate (combo) operand modulo 8, keeping lowest 3 bits.
     /// </summary>
     private long ModuloOperand(byte operand)
     {
-        return PositiveMod(ComboOperand(operand), 8);
+        return MathUtility.Mod(ComboOperand(operand), 8);
     }
 
     private List<byte> RunProgram()
@@ -88,7 +81,8 @@ class Solution : ISolver
 
         while (pointer < program.Length)
         {
-            byte opcode = program[pointer], operand = program[pointer + 1];
+            byte opcode = program[pointer],
+                operand = program[pointer + 1];
 
             switch (opcode)
             {

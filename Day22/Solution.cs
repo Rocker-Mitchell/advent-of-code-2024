@@ -36,14 +36,9 @@ class Solution : ISolver
         return secretNumber ^ value;
     }
 
-    static int PositiveModulo(int dividend, int divisor)
-    {
-        return (dividend % divisor + divisor) % divisor;
-    }
-
     static int Prune(int secretNumber)
     {
-        return PositiveModulo(secretNumber, 16777216);
+        return MathUtility.Mod(secretNumber, 16777216);
     }
 
     static int NextSecretNumber(int secretNumber)
@@ -76,7 +71,7 @@ class Solution : ISolver
     static int Price(int secretNumber)
     {
         // pick out the ones digit
-        return PositiveModulo(secretNumber, 10);
+        return MathUtility.Mod(secretNumber, 10);
     }
 
     static Dictionary<DifferenceSequence, int> GenerateDifferenceSequenceToPriceMap(
