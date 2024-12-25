@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using System.Drawing;
-using AdventOfCode2024.Day10;
 using AdventOfCode2024.Lib;
 
 namespace AdventOfCode2024.Day15;
@@ -19,12 +18,12 @@ class Solution : ISolver
     //  wrapping a point for a mutable state and pass-by-reference
     private class Entity(Point position, bool wide = false)
     {
-        private Point position = position;
-        private readonly bool isWide = wide;
+        private Point _position = position;
+        private readonly bool _isWide = wide;
 
         public Point[] GetArea()
         {
-            return isWide ? [position, position + new Size(1, 0)] : [position];
+            return _isWide ? [_position, _position + new Size(1, 0)] : [_position];
         }
 
         public bool Overlaps(Point[] points)
@@ -39,22 +38,27 @@ class Solution : ISolver
 
         public void Move(Size offset)
         {
-            position += offset;
+            _position += offset;
         }
 
         public int Coordinate()
         {
-            return position.X + 100 * position.Y;
+            return _position.X + 100 * _position.Y;
+        }
+
+        public override string ToString()
+        {
+            return $"Entity(area: [{string.Join(", ", GetArea())}])";
         }
     }
 
-    private Entity? robot;
+    private Entity? _robot;
 
-    private Entity[] boxes = [];
+    private Entity[] _boxes = [];
 
-    private ImmutableHashSet<Point> walls = [];
+    private ImmutableHashSet<Point> _walls = [];
 
-    private string movementSequence = string.Empty;
+    private string _movementSequence = string.Empty;
 
     private void ParseInput(string input, bool isWideWarehouse = false)
     {
@@ -73,7 +77,7 @@ class Solution : ISolver
                 switch (mapLines[y][x])
                 {
                     case '@':
-                        robot = new(new Point(finalX, y));
+                        _robot = new(new Point(finalX, y));
                         break;
                     case 'O':
                         boxPositions.Add(new Point(finalX, y));
@@ -87,10 +91,10 @@ class Solution : ISolver
                 }
             }
         }
-        boxes = [.. boxPositions.Select(p => new Entity(p, isWideWarehouse))];
-        walls = [.. wallPoints];
+        _boxes = [.. boxPositions.Select(p => new Entity(p, isWideWarehouse))];
+        _walls = [.. wallPoints];
 
-        movementSequence = string.Join(string.Empty, parts[1].Split('\n'));
+        _movementSequence = string.Join(string.Empty, parts[1].Split('\n'));
     }
 
     private static Size GetMovement(char direction)
@@ -108,89 +112,61 @@ class Solution : ISolver
         };
     }
 
-    private Entity[] GetEntitiesThatWillMove(Entity pusher, char direction)
+    private (bool, List<Entity>) TryToMoveEntity(Entity entity, char direction)
     {
-        var pushArea = pusher.GetPotentialArea(GetMovement(direction));
+        var movement = GetMovement(direction);
+        var potentialArea = entity.GetPotentialArea(movement);
 
-        // can't move into a wall, return empty
-        if (walls.Any(wall => pushArea.Contains(wall)))
+        // can't move into a wall
+        if (_walls.Any(wall => potentialArea.Contains(wall)))
         {
-            return [];
+            return (false, []);
         }
 
-        // determine boxes that would be affected by the push area, then get
-        //  their recursive entities that will move
-        var affectedBoxes = Array.FindAll(
-            boxes,
-            delegate (Entity box) { return box.Overlaps(pushArea); }
+        // detect boxes in the way and try to move them recursively
+        var boxesInTheWay = Array.FindAll(
+            _boxes,
+            delegate(Entity box)
+            {
+                // NB we don't want to detect the entity itself as a box in
+                //  the way, or we'll get in a circular recursion
+                return !ReferenceEquals(box, entity) && box.Overlaps(potentialArea);
+            }
         );
-        var boxesThatWillMove = affectedBoxes.Select(
-            box => GetEntitiesThatWillMove(box, direction)
-        ).ToArray();
-
-        // if any recursive result is empty, that flagged a wall; propagate
-        if (boxesThatWillMove.Any(boxes => boxes.Length == 0))
+        List<Entity> allBoxesMoved = [];
+        foreach (var box in boxesInTheWay)
         {
-            return [];
+            var (moved, boxesMoved) = TryToMoveEntity(box, direction);
+            allBoxesMoved.AddRange(boxesMoved);
+            if (!moved)
+            {
+                // rollback any boxes that were moved in prior recursions
+                foreach (var movedBox in allBoxesMoved)
+                {
+                    movedBox.Move(movement * -1);
+                }
+
+                return (false, []);
+            }
         }
 
-        // return the pusher with a flattening of affected boxes; length is
-        //  at least 1 and not flagging a wall
-        return [
-            pusher,
-            .. boxesThatWillMove.SelectMany(boxes => boxes)
-        ];
+        entity.Move(movement);
+        return (true, [entity, .. allBoxesMoved]);
     }
 
     private void MoveRobot(char direction)
     {
-        if (robot == null)
-            throw new Exception(
-                $"Robot is not set, can't apply movement '{direction}'."
-            );
+        if (_robot == null)
+            throw new Exception($"Robot is not set, can't apply movement '{direction}'.");
 
-        var entitiesToPush = GetEntitiesThatWillMove(robot, direction);
-        // empty array means wall prevents movement, otherwise valid to move
-        foreach (var ent in entitiesToPush)
-        {
-            ent.Move(GetMovement(direction));
-        }
+        TryToMoveEntity(_robot, direction);
     }
 
     private void FollowMovementSequence()
     {
-        foreach (var step in movementSequence)
+        foreach (var step in _movementSequence)
         {
-            try
-            {
-                MoveRobot(step);
-            }
-            catch (StackOverflowException)
-            {
-                DebugRoom();
-            }
-        }
-    }
-
-    private void DebugRoom()
-    {
-        foreach (int y in Enumerable.Range(0, 50))
-        {
-            foreach (int x in Enumerable.Range(0, 50 * 2))
-            {
-                Point testPoint = new(x, y);
-                if (walls.Contains(testPoint))
-                    Console.Write('#');
-#pragma warning disable CS8602 // Dereference of a possibly null reference.
-                else if (boxes.Any(box => box.Overlaps([testPoint])))
-                    Console.Write('O');
-                else if (robot.Overlaps([testPoint]))
-                    Console.Write('@');
-                else
-                    Console.Write('.');
-#pragma warning restore CS8602 // Dereference of a possibly null reference.
-            }
-            Console.WriteLine();
+            MoveRobot(step);
         }
     }
 
@@ -200,19 +176,15 @@ class Solution : ISolver
 
         FollowMovementSequence();
 
-        return boxes.Select(box => box.Coordinate()).Sum();
+        return _boxes.Select(box => box.Coordinate()).Sum();
     }
 
     public object PartTwo(string input)
     {
-        /*
         ParseInput(input, true);
 
         FollowMovementSequence();
 
-        return boxes.Select(box => box.Coordinate()).Sum();\
-        */
-        // BUG StackOverflowException, having hard time debugging
-        return "TODO implement";
+        return _boxes.Select(box => box.Coordinate()).Sum();
     }
 }
