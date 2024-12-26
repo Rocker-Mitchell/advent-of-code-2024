@@ -3,6 +3,47 @@ using AdventOfCode2024.Lib;
 
 namespace AdventOfCode2024.Day16;
 
+using DistanceMap = Dictionary<Step, int>;
+
+/// <summary>
+/// The representation of a step in the maze.
+/// </summary>
+/// <param name="Position">The position in the maze.</param>
+/// <param name="OffsetDirection">
+/// A relative offset that reflects the direction being faced.
+/// </param>
+record struct Step(Point Position, Size OffsetDirection)
+{
+    public readonly Step Reverse() => new(Position, OffsetDirection * -1);
+
+    public readonly IEnumerable<Step> NextSteps()
+    {
+        // the step continuing in the direction of the offset
+        yield return new Step(Position + OffsetDirection, OffsetDirection);
+        // the steps turning 90 degrees to the left and right, without moving
+        Size offsetLeft = new(OffsetDirection.Height, -OffsetDirection.Width);
+        yield return new Step(Position, offsetLeft);
+        Size offsetRight = new(-OffsetDirection.Height, OffsetDirection.Width);
+        yield return new Step(Position, offsetRight);
+    }
+
+    public readonly int PointsToNextStep(Step next)
+    {
+        var points = 0;
+        // one point for a change in position
+        if (Position != next.Position)
+        {
+            points++;
+        }
+        // if we are turning 90 degrees either direction, add 1000 points
+        if (OffsetDirection != next.OffsetDirection)
+        {
+            points += 1000;
+        }
+        return points;
+    }
+}
+
 /// <summary>
 /// Solution code for Day 16: Reindeer Maze
 /// </summary>
@@ -24,16 +65,15 @@ class Solution : ISolver
     }
     //*/
 
-    private string[] maze = [];
-    private Point start;
-    private Point end;
-    private readonly HashSet<Point> openSpaces = [];
+    private Point _start;
+    private Point _end;
+    private readonly HashSet<Point> _openSpaces = [];
 
     private void ParseMaze(string input)
     {
-        openSpaces.Clear();
+        _openSpaces.Clear();
 
-        maze = input.Split('\n');
+        var maze = input.Split('\n');
         for (int y = 0; y < maze.Length; y++)
         {
             for (int x = 0; x < maze[y].Length; x++)
@@ -41,13 +81,13 @@ class Solution : ISolver
                 switch (maze[y][x])
                 {
                     case 'S':
-                        start = new Point(x, y);
+                        _start = new Point(x, y);
                         break;
                     case 'E':
-                        end = new Point(x, y);
+                        _end = new Point(x, y);
                         break;
                     case '.':
-                        openSpaces.Add(new Point(x, y));
+                        _openSpaces.Add(new Point(x, y));
                         break;
                     case '#':
                         break;
@@ -61,204 +101,84 @@ class Solution : ISolver
         }
     }
 
-    private enum Orientation
+    private DistanceMap DijkstraSearch(Step start)
     {
-        East,
-        South,
-        West,
-        North
-    }
+        var distances = new DistanceMap();
+        var queue = new PriorityQueue<Step, int>();
 
-    private static Orientation GetOrientation(Point from, Point to)
-    {
-        int dx = to.X - from.X;
-        int dy = to.Y - from.Y;
+        distances[start] = 0;
+        queue.Enqueue(start, 0);
 
-        if (Math.Abs(dx) + Math.Abs(dy) != 1)
-            throw new ArgumentException("Points must be adjacent.");
-
-        if (dx == 1) return Orientation.East;
-        if (dx == -1) return Orientation.West;
-        if (dy == 1) return Orientation.South;
-        return Orientation.North;
-    }
-
-    private static Orientation ClockwiseOrientation(Orientation orientation)
-    {
-        return orientation switch
+        while (queue.TryDequeue(out var current, out var totalDistance))
         {
-            Orientation.East => Orientation.South,
-            Orientation.South => Orientation.West,
-            Orientation.West => Orientation.North,
-            Orientation.North => Orientation.East,
-            _ => throw new ArgumentException(
-                $"Could not rotate given Orientation: {orientation}.",
-                nameof(orientation)
-            ),
-        };
-    }
-
-    private static int GetMinimumTurns(Orientation from, Orientation to)
-    {
-        if (from == to) return 0;
-
-        // convenient to rotate both until 'from' is a specific known value
-        while (from != Orientation.East)
-        {
-            from = ClockwiseOrientation(from);
-            to = ClockwiseOrientation(to);
-        }
-
-        return to switch
-        {
-            Orientation.South => 1,
-            Orientation.West => 2,
-            Orientation.North => 1,
-            _ => throw new ArgumentException(
-                $"Could not handle given Orientation: {to}.", nameof(to)
-            ),
-        };
-    }
-
-    // NB distance costs between points can get significantly different
-    //  depending on the direction the first point was entered into, need
-    //  it encoded
-    private record struct PointEntered(Point Position, Orientation EntryDirection);
-
-    private static PointEntered[] GenerateAllDirections(Point position)
-    {
-        return [
-            new (position, Orientation.East),
-            new (position, Orientation.South),
-            new (position, Orientation.West),
-            new (position, Orientation.North),
-        ];
-    }
-
-    private static
-    PointEntered GenerateNeighborPointEntered(Point position, Orientation orientation)
-    {
-        var neighborPosition = orientation switch
-        {
-            Orientation.East => position + new Size(1, 0),
-            Orientation.South => position + new Size(0, 1),
-            Orientation.West => position + new Size(-1, 0),
-            Orientation.North => position + new Size(0, -1),
-            _ => throw new ArgumentException(
-                $"Could not handle given Orientation: {orientation}.",
-                nameof(orientation)
-            ),
-        };
-        return new(neighborPosition, orientation);
-    }
-
-    private int DijkstraSearch()
-    {
-        Dictionary<PointEntered, int> distance =
-            new((openSpaces.Count + 2) * 4) {
-                {new (start, Orientation.East), 0}
-            };
-        Dictionary<PointEntered, PointEntered> previous =
-            new((openSpaces.Count + 2) * 4);
-
-        int GetDistanceDefaultMax(PointEntered pe) =>
-            distance.GetValueOrDefault(pe, int.MaxValue);
-
-        HashSet<PointEntered> toVisit = new((openSpaces.Count + 2) * 4) {
-            new (start, Orientation.East),
-        };
-        toVisit.UnionWith(openSpaces.SelectMany(GenerateAllDirections));
-        toVisit.UnionWith(GenerateAllDirections(end));
-
-        while (toVisit.Count > 0)
-        {
-            var next = toVisit.MinBy(GetDistanceDefaultMax);
-            // don't continue if we reached the target
-            if (next.Position == end) break;
-            toVisit.Remove(next);
-
-            var nextDist = GetDistanceDefaultMax(next);
-
-            var neighbors = toVisit.Intersect([
-                GenerateNeighborPointEntered(next.Position, Orientation.East),
-                GenerateNeighborPointEntered(next.Position, Orientation.South),
-                GenerateNeighborPointEntered(next.Position, Orientation.West),
-                GenerateNeighborPointEntered(next.Position, Orientation.North),
-            ]);
-            foreach (var neighbor in neighbors)
+            foreach (
+                var next in current
+                    .NextSteps()
+                    .Where(n =>
+                        n.Position == _start
+                        || n.Position == _end
+                        || _openSpaces.Contains(n.Position)
+                    )
+            )
             {
-                int cost = 1
-                    + GetMinimumTurns(
-                        next.EntryDirection, neighbor.EntryDirection
-                    ) * 1000;
-
-                var dist = nextDist + cost;
-                // worried about overflow to negative, checking it's positive
-                if (dist >= 0 && dist < GetDistanceDefaultMax(neighbor))
+                var nextDistance = totalDistance + current.PointsToNextStep(next);
+                if (nextDistance < distances.GetValueOrDefault(next, int.MaxValue))
                 {
-                    distance[neighbor] = dist;
-                    previous[neighbor] = next;
+                    distances[next] = nextDistance;
+                    queue.Enqueue(next, nextDistance);
                 }
             }
         }
 
-        PointEntered? endPE = distance.Keys.Single(k => k.Position == end);
-        if (endPE.HasValue)
-        {
-            /*
-            HashSet<Point> minimumPath = [end];
-            PointEntered last = endPE.Value;
-            while (previous.TryGetValue(last, out var prev))
-            {
-                minimumPath.Add(prev.Position);
-                last = prev;
-            }
-            DebugPrint(minimumPath);
-            Console.WriteLine("length: {0}", minimumPath.Count);
-            */
-            return distance[endPE.Value];
-        }
-        else
-        {
-            throw new Exception("Failed to reach end.");
-        }
+        return distances;
     }
 
-    private void DebugPrint(HashSet<Point> minimumPath)
+    private int ShortestEndDistance(DistanceMap distancesFromStart)
     {
-        for (int y = 0; y < maze.Length; y++)
-        {
-            for (int x = 0; x < maze[y].Length; x++)
-            {
-                if (maze[y][x] == '#')
-                {
-                    Console.Write('█');
-                }
-                else if (minimumPath.Contains(new Point(x, y)))
-                {
-                    Console.Write('O');
-                }
-                else
-                {
-                    Console.Write(' ');
-                }
-            }
-            Console.WriteLine();
-        }
+        // the shortest step on end may have been offset from any direction,
+        //  so we filter for the end position then pick the one with the
+        //  shortest distance
+        return distancesFromStart.Where(kvp => kvp.Key.Position == _end).Min(kvp => kvp.Value);
     }
+
+    // we start facing east, so offset moves to the right
+    private Step StartingStep() => new(_start, new Size(1, 0));
 
     public object PartOne(string input)
     {
         ParseMaze(input);
 
-        var result = DijkstraSearch();
+        var distancesFromStart = DijkstraSearch(StartingStep());
 
-        return result;
-        // TODO taking 20s to run
+        return ShortestEndDistance(distancesFromStart);
     }
 
     public object PartTwo(string input)
     {
-        return "TODO implement";
+        ParseMaze(input);
+
+        var distancesFromStart = DijkstraSearch(StartingStep());
+
+        // find the single step on the end that's the shortest distance, then
+        //  search from that step (reversed in direction)
+        var shortestDistance = ShortestEndDistance(distancesFromStart);
+        var shortestEndStep = distancesFromStart
+            .Single(kvp => kvp.Key.Position == _end && kvp.Value == shortestDistance)
+            .Key;
+        var distancesFromEnd = DijkstraSearch(shortestEndStep.Reverse());
+
+        // we can evaluate for a step the distances to the start and end, so
+        //  any that sum to equal the shortest distance should be a step on on
+        //  one of the many possible shortest paths; steps to turn may lead to
+        //  multiple instances with the same position, so pick out the
+        //  distinct ones
+        return distancesFromStart
+            .Where(kvp =>
+                distancesFromEnd.ContainsKey(kvp.Key.Reverse())
+                && kvp.Value + distancesFromEnd[kvp.Key.Reverse()] == shortestDistance
+            )
+            .Select(kvp => kvp.Key.Position)
+            .Distinct()
+            .Count();
     }
 }
