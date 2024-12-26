@@ -20,25 +20,22 @@ class Solution : ISolver
     }
     //*/
 
-    private long registerA;
-    private long registerB;
-    private long registerC;
+    private long _registerA;
+    private long _registerB;
+    private long _registerC;
 
-    private byte[] program = [];
-    private int pointer;
+    private byte[] _program = [];
 
     private void InitializeProgram(string input)
     {
         var parts = input.Split("\n\n");
 
         var registerLines = parts[0].Split('\n');
-        registerA = int.Parse(registerLines[0].Split(": ")[1]);
-        registerB = int.Parse(registerLines[1].Split(": ")[1]);
-        registerC = int.Parse(registerLines[2].Split(": ")[1]);
+        _registerA = int.Parse(registerLines[0].Split(": ")[1]);
+        _registerB = int.Parse(registerLines[1].Split(": ")[1]);
+        _registerC = int.Parse(registerLines[2].Split(": ")[1]);
 
-        program = [.. parts[1].Split(": ")[1].Split(',').Select(byte.Parse)];
-
-        pointer = 0;
+        _program = [.. parts[1].Split(": ")[1].Split(',').Select(byte.Parse)];
     }
 
     /// <summary>
@@ -46,15 +43,15 @@ class Solution : ISolver
     /// </summary>
     private long ComboOperand(byte operand)
     {
-        if (operand >= 0 && operand <= 3)
+        if (operand < 4)
             return operand;
 
         if (operand == 4)
-            return registerA;
+            return _registerA;
         if (operand == 5)
-            return registerB;
+            return _registerB;
         if (operand == 6)
-            return registerC;
+            return _registerC;
 
         throw new ArgumentException($"Could not handle operand {operand}.", nameof(operand));
     }
@@ -64,7 +61,7 @@ class Solution : ISolver
     /// </summary>
     private long DivA(byte operand)
     {
-        return registerA / (long)Math.Pow(2, ComboOperand(operand));
+        return _registerA >> (int)ComboOperand(operand);
     }
 
     /// <summary>
@@ -72,35 +69,36 @@ class Solution : ISolver
     /// </summary>
     private long ModuloOperand(byte operand)
     {
-        return MathUtility.Mod(ComboOperand(operand), 8);
+        return ComboOperand(operand) & 7;
     }
 
     private List<byte> RunProgram()
     {
         List<byte> output = [];
+        var pointer = 0;
 
-        while (pointer < program.Length)
+        while (pointer + 1 < _program.Length)
         {
-            byte opcode = program[pointer],
-                operand = program[pointer + 1];
+            byte opcode = _program[pointer],
+                operand = _program[pointer + 1];
 
             switch (opcode)
             {
                 case 0:
                     // adv
-                    registerA = DivA(operand);
+                    _registerA = DivA(operand);
                     break;
                 case 1:
                     // bxl
-                    registerB ^= operand;
+                    _registerB ^= operand;
                     break;
                 case 2:
                     // bst
-                    registerB = ModuloOperand(operand);
+                    _registerB = ModuloOperand(operand);
                     break;
                 case 3:
                     // jnz
-                    if (registerA != 0)
+                    if (_registerA != 0)
                     {
                         pointer = operand;
                         // skip the normal increment of pointer
@@ -109,7 +107,7 @@ class Solution : ISolver
                     break;
                 case 4:
                     // bxc
-                    registerB ^= registerC;
+                    _registerB ^= _registerC;
                     break;
                 case 5:
                     // out
@@ -117,11 +115,11 @@ class Solution : ISolver
                     break;
                 case 6:
                     // bdv
-                    registerB = DivA(operand);
+                    _registerB = DivA(operand);
                     break;
                 case 7:
                     // cdv
-                    registerC = DivA(operand);
+                    _registerC = DivA(operand);
                     break;
                 default:
                     throw new Exception($"Could not handle opcode {opcode}.");
@@ -145,12 +143,87 @@ class Solution : ISolver
         /*
         What do you get if you use commas to join the values it output into a single string?
         */
-        // I'm fried
         return string.Join(',', output);
+    }
+
+    private long GenerateDesiredRegisterA()
+    {
+        /*
+        input: 2,4, 1,1, 7,5, 4,6, 1,4, 0,3, 5,5, 3,0
+        interpretation:
+            do {
+                _registerB = _registerA % 8; // ModuloOperand(4);
+                _registerB ^= 1;
+                _registerC = _registerA >> _registerB; // DivA(5);
+                _registerB ^= _registerC;
+                _registerB ^= 4;
+                _registerA = _registerA >> 3 // DivA(3);
+                // only changing A here, so we're working through its bytes 3 at a time
+                output.Add((byte) _registerB % 8); // ModuloOperand(5));
+            }
+            while (_registerA != 0)
+
+        The last loop has to have register A bits 3 and up 0's to end loop
+        (will bit shift right 3 to be all 0's), the unknown is the 3 least
+        significant bits before the loop starts.
+            - Can test values 0 through 7 to get last output matching.
+        Once the 3 bits have a working value, we can shift left 3 to postulate
+        the previous loop; the least significant 3 bits are the unknown again.
+            - Repeat solving the 3 bits to get the desired output of that loop
+                step and shifting left 3 for the next loop.
+        */
+        HashSet<long>[] workingRegistersByStep = new HashSet<long>[_program.Length];
+
+        for (int step = _program.Length - 1; step >= 0; step--)
+        {
+            HashSet<long> priorWorkingRegisters =
+                step + 1 < workingRegistersByStep.Length ? workingRegistersByStep[step + 1] : [0];
+            HashSet<long> workingRegisters = [];
+
+            foreach (var priorWorkingRegister in priorWorkingRegisters)
+            {
+                // evaluate with all the 3 bit values, tracking when they
+                //  correctly compute the target output
+                for (int value = 0; value < 8; value++)
+                {
+                    var currentStepRegister = (priorWorkingRegister << 3) + value;
+                    _registerA = currentStepRegister;
+                    _registerB = 0;
+                    _registerC = 0;
+
+                    var output = RunProgram();
+                    if (output[0] == _program[step])
+                    {
+                        workingRegisters.Add(currentStepRegister);
+                    }
+                }
+            }
+
+            workingRegistersByStep[step] = workingRegisters;
+        }
+
+        return workingRegistersByStep[0].Min();
     }
 
     public object PartTwo(string input)
     {
-        return "TODO implement";
+        InitializeProgram(input);
+
+        var desiredRegisterA = GenerateDesiredRegisterA();
+
+        _registerA = desiredRegisterA;
+        _registerB = 0;
+        _registerC = 0;
+        var output = RunProgram();
+        if (output.SequenceEqual(_program))
+        {
+            return desiredRegisterA;
+        }
+        else
+        {
+            throw new Exception(
+                $"Didn't find correct desired A register, output: [{string.Join(", ", output)}]."
+            );
+        }
     }
 }
